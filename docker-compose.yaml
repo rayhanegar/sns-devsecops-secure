@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
       target: production
     image: sns-dso-app:${APP_VERSION:-latest}
-    container_name: sns-dso-app
+    container_name: sns-dso-app-secure
     restart: unless-stopped
     volumes:
       - ./src:/var/www/html:delegated
@@ -19,7 +19,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       # - REDIS_HOST=redis  
     networks:
-      - sns-dso-internal  
+      - sns-dso-secure-internal  
     depends_on:
       - sns-dso-db
       # - redis
@@ -32,21 +32,21 @@ services:
 
   web:
     image: nginx:alpine
-    container_name: sns-dso-web
+    container_name: sns-dso-secure-web
     restart: unless-stopped
     volumes:
       - ./src:/var/www/html:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
     networks:
       proxy-network:
-        ipv4_address: 172.20.0.30  
-      sns-dso-internal:  
+        ipv4_address: 172.20.0.40  
+      sns-dso-secure-internal:  
     depends_on:
       - sns-dso-app
 
   sns-dso-db:
     image: mariadb:10.11
-    container_name: sns-dso-db
+    container_name: sns-dso-secure- db
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${DB_NAME:-twita_db}
@@ -57,7 +57,7 @@ services:
       - ./db-data:/var/lib/mysql
       - ./database:/docker-entrypoint-initdb.d:ro
     networks:
-      - sns-dso-internal  
+      - sns-dso-secure-internal  
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
@@ -76,7 +76,7 @@ services:
   #   volumes:
   #     - ./redis-data:/data
   #   networks:
-  #     - sns-dso-internal  
+  #     - sns-dso-secure-internal  
 
 volumes:
   db-data:
@@ -87,14 +87,14 @@ networks:
     external: true
     name: proxy-network
   
-  sns-dso-internal:
-    name: sns-dso-internal
+  sns-dso-secure-internal:
+    name: sns-dso-secure-internal
     driver: bridge
     ipam:
       driver: default
       config:
-        - subnet: 172.22.0.0/16
-          gateway: 172.22.0.1
+        - subnet: 172.24.0.0/16
+          gateway: 172.24.0.1
     labels:
-      com.devsecops.description: "Internal network for SNS DSO services"
-      com.devsecops.managed-by: "sns-dso-app-internal" 
+      com.devsecops.description: "Internal network for SNS DSO Secure services"
+      com.devsecops.managed-by: "sns-dso-app-secure-internal" 
