@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  sns-dso-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: sns-dso-app:${APP_VERSION:-latest}
+    container_name: sns-dso-app
+    restart: unless-stopped
+    volumes:
+      - ./src:/var/www/html:delegated
+      - ./storage:/var/www/html/storage:delegated
+    environment:
+      - DB_HOST=${DB_HOST:-sns-dso-db}
+      - DB_NAME=${DB_NAME:-twita_db}
+      - DB_USER=${DB_USER:-sns_user}
+      - DB_PASSWORD=${DB_PASSWORD}
+      # - REDIS_HOST=redis  
+    networks:
+      - sns-dso-internal  
+    depends_on:
+      - sns-dso-db
+      # - redis
+    healthcheck:
+      test: ["CMD-SHELL", "php -v || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  web:
+    image: nginx:alpine
+    container_name: sns-dso-web
+    restart: unless-stopped
+    volumes:
+      - ./src:/var/www/html:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    networks:
+      proxy-network:
+        ipv4_address: 172.20.0.30  
+      sns-dso-internal:  
+    depends_on:
+      - sns-dso-app
+
+  sns-dso-db:
+    image: mariadb:10.11
+    container_name: sns-dso-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-twita_db}
+      MYSQL_USER: ${DB_USER:-sns_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - ./db-data:/var/lib/mysql
+      - ./database:/docker-entrypoint-initdb.d:ro
+    networks:
+      - sns-dso-internal  
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max-connections=200
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: sns-dso-redis
+  #   restart: unless-stopped
+  #   command: redis-server --appendonly yes
+  #   volumes:
+  #     - ./redis-data:/data
+  #   networks:
+  #     - sns-dso-internal  
+
+volumes:
+  db-data:
+    driver: local
+
+networks:
+  proxy-network:
+    external: true
+    name: proxy-network
+  
+  sns-dso-internal:
+    name: sns-dso-internal
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.22.0.0/16
+          gateway: 172.22.0.1
+    labels:
+      com.devsecops.description: "Internal network for SNS DSO services"
+      com.devsecops.managed-by: "sns-dso-app-internal" 
