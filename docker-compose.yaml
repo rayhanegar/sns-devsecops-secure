@@ -46,7 +46,7 @@ services:
 
   sns-dso-db:
     image: mariadb:10.11
-    container_name: sns-dso-secure- db
+    container_name: sns-dso-secure-db
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${DB_NAME:-twita_db}
