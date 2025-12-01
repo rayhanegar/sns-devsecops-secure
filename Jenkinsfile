@@ -7,6 +7,7 @@ pipeline {
         BRANCH = 'main'
         APP_PATH = '/home/dso505/twitah-devsecops-secured'
         SNS_PATH = '/home/dso505/sns-devsecops-secure'
+        APP_URL = 'http://sns-secure.devsec505.com'
     }
 
     triggers {
@@ -60,13 +61,44 @@ pipeline {
             }
         }
 
+        stage('DAST Scan') {
+            steps {
+                script {
+                    def timestamp = sh(script: 'date +%Y%m%d-%H%M%S', returnStdout: true).trim()
+                    env.REPORT_NAME = "zap-report-${timestamp}"
+                    
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ${TARGET_SERVER} '
+                            mkdir -p /tmp/zap-reports
+                            docker run --rm \
+                                --network host \
+                                -v /tmp/zap-reports:/zap/wrk:rw \
+                                ghcr.io/zaproxy/zaproxy:stable \
+                                zap-baseline.py \
+                                -t ${APP_URL} \
+                                -r ${REPORT_NAME}.html \
+                                -J ${REPORT_NAME}.json \
+                                -I
+                        '
+                    """
+                    
+                    sh """
+                        scp ${TARGET_SERVER}:/tmp/zap-reports/${REPORT_NAME}.html ${WORKSPACE}/
+                        scp ${TARGET_SERVER}:/tmp/zap-reports/${REPORT_NAME}.json ${WORKSPACE}/
+                    """
+                    
+                    archiveArtifacts artifacts: 'zap-report-*.html, zap-report-*.json', allowEmptyArchive: true
+                }
+            }
+        }
+
         stage('Verify') {
             steps {
                 sh """
                     ssh -o StrictHostKeyChecking=no ${TARGET_SERVER} '
                         docker ps --filter name=sns-dso --format \"table {{.Names}}\t{{.Status}}\"
                         sleep 5
-                        curl -sf http://sns-secure.devsec505.com > /dev/null || exit 1
+                        curl -sf ${APP_URL} > /dev/null || exit 1
                     '
                 """
             }
